@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BeatLens v5 — Music Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     APP SHELL
+═══════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-icon">🎵</div>
+      <div class="sb-logo-text">BeatLens</div>
+    </div>
+
+    <nav class="sb-nav">
+      <button class="sb-btn active" data-page="dashboard" onclick="navigate('dashboard',this)">
+        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        Dashboard
+      </button>
+      <button class="sb-btn" data-page="player" onclick="navigate('player',this)">
+        <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        Player
+      </button>
+      <button class="sb-btn" data-page="library" onclick="navigate('library',this)">
+        <svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 5h-3v5.5c0 1.38-1.12 2.5-2.5 2.5S10 13.88 10 12.5 11.12 10 12.5 10c.57 0 1.08.19 1.5.51V5h4v2zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"/></svg>
+        Library
+      </button>
+      <button class="sb-btn" data-page="playlists" onclick="navigate('playlists',this)">
+        <svg viewBox="0 0 24 24"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+        Playlists
+      </button>
+      <button class="sb-btn" data-page="analysis" onclick="navigate('analysis',this)">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        Analysis
+      </button>
+    </nav>
+
+    <!-- Saved Playlists in sidebar -->
+    <div class="sb-section">
+      <div class="sb-section-title">MY PLAYLISTS</div>
+      <div id="sbPlaylistList">
+        <div class="sb-pl-empty">No playlists yet</div>
+      </div>
+      <button class="sb-new-pl" onclick="promptNewPlaylist()">+ New Playlist</button>
+    </div>
+
+    <!-- Upload in sidebar -->
+    <div class="sb-upload-btn" id="sbUploadZone">
+      <input type="file" id="fileInput" accept="audio/*" multiple hidden/>
+      <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+      Add Songs
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="mainContent">
+
+    <!-- ── PAGE: DASHBOARD ── -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h1 class="page-title">Good <span id="timeGreeting">evening</span> 👋</h1>
+        <p class="page-sub">Here's what's happening in your music library</p>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-icon">🎵</div>
+          <div class="stat-val" id="statSongs">0</div>
+          <div class="stat-label">Songs</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📂</div>
+          <div class="stat-val" id="statPlaylists">0</div>
+          <div class="stat-label">Playlists</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⏱</div>
+          <div class="stat-val" id="statDuration">0m</div>
+          <div class="stat-label">Total Time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🎹</div>
+          <div class="stat-val" id="statTopKey">—</div>
+          <div class="stat-label">Common Key</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🥁</div>
+          <div class="stat-val" id="statAvgBpm">—</div>
+          <div class="stat-label">Avg BPM</div>
+        </div>
+      </div>
+
+      <!-- Recent songs -->
+      <div class="section-header-row">
+        <h2 class="section-title">Recently Added</h2>
+        <button class="see-all" onclick="navigate('library',document.querySelector('[data-page=library]'))">See all →</button>
+      </div>
+      <div class="recent-grid" id="recentGrid">
+        <div class="dash-empty">Upload some songs to get started!</div>
+      </div>
+
+      <!-- Key distribution chart -->
+      <div class="section-header-row" style="margin-top:32px">
+        <h2 class="section-title">Key Distribution</h2>
+      </div>
+      <div class="key-chart" id="keyChart"></div>
+
+      <!-- BPM distribution -->
+      <div class="section-header-row" style="margin-top:32px">
+        <h2 class="section-title">BPM Spread</h2>
+      </div>
+      <div class="bpm-histogram" id="bpmHistogram"></div>
+    </div>
+
+    <!-- ── PAGE: PLAYER ── -->
+    <div class="page" id="page-player">
+      <div class="player-page-layout">
+
+        <!-- Left: artwork + info -->
+        <div class="pp-left">
+          <div class="pp-artwork" id="ppArtwork">
+            <div class="pp-artwork-icon">🎵</div>
+            <div class="beat-ring" id="beatRing"></div>
+          </div>
+          <div class="pp-song-info">
+            <div class="pp-title" id="ppTitle">No song loaded</div>
+            <div class="pp-meta">
+              <span class="pp-badge" id="ppKey">—</span>
+              <span class="pp-badge" id="ppBpm">—</span>
+              <span class="pp-badge" id="ppScale">—</span>
+            </div>
+          </div>
+
+          <!-- Quick add to playlist -->
+          <div class="pp-pl-add hidden" id="ppPlAdd">
+            <div class="pp-pl-label">Add to playlist:</div>
+            <div class="pp-pl-chips" id="ppPlChips"></div>
+          </div>
+        </div>
+
+        <!-- Right: waveform + controls + analysis -->
+        <div class="pp-right">
+
+          <!-- Waveform -->
+          <div class="waveform-container">
+            <canvas id="waveformCanvas"></canvas>
+            <div id="waveTooltip" class="wave-tooltip"></div>
+          </div>
+
+          <!-- Time row -->
+          <div class="time-row">
+            <span class="time-label" id="currentTime">0:00</span>
+            <div class="seekbar" id="seekbar" onclick="seekClick(event)">
+              <div class="seekbar-fill" id="seekbarFill"></div>
+              <div class="seekbar-thumb" id="seekbarThumb"></div>
+            </div>
+            <span class="time-label" id="totalTime">0:00</span>
+          </div>
+
+          <!-- Main controls -->
+          <div class="player-controls">
+            <button class="pc-btn pc-sm" onclick="skipTrack(-1)" title="Previous (Shift+←)">⏮</button>
+            <button class="pc-btn pc-sm" onclick="skipSeconds(-10)" title="Back 10s (←)">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="8" y="15" font-size="6" fill="currentColor">10</text></svg>
+            </button>
+            <button class="pc-btn pc-play" id="playBtn" onclick="togglePlay()">▶</button>
+            <button class="pc-btn pc-sm" onclick="skipSeconds(10)" title="Forward 10s (→)">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="8" y="15" font-size="6" fill="currentColor">10</text></svg>
+            </button>
+            <button class="pc-btn pc-sm" onclick="skipTrack(1)" title="Next (Shift+→)">⏭</button>
+            <button class="pc-btn pc-sm" id="loopBtn" onclick="toggleLoop()" title="Loop (L)">🔁</button>
+            <button class="pc-btn pc-sm" id="shuffleBtn" onclick="toggleShuffle()" title="Shuffle (S)">🔀</button>
+          </div>
+
+          <!-- Speed + Volume -->
+          <div class="sliders-row">
+            <div class="slider-group">
+              <label>Speed</label>
+              <input type="range" id="speedSlider" min="0.25" max="2" step="0.05" value="1" oninput="changeSpeed(this.value)"/>
+              <span id="speedVal">1.0×</span>
+            </div>
+            <div class="slider-group">
+              <label>Volume</label>
+              <input type="range" id="volSlider" min="0" max="1" step="0.02" value="1" oninput="changeVolume(this.value)"/>
+              <span id="volVal">100%</span>
+            </div>
+          </div>
+
+          <!-- Beat detector -->
+          <div class="beat-detector" id="beatDetector">
+            <div class="bd-top-row">
+              <div class="bd-title-group">
+                <div class="bd-pulse-dot" id="bdPulseDot"></div>
+                <span class="bd-label">BEAT DETECTOR</span>
+              </div>
+              <div class="bd-bpm-display">
+                <span class="bd-bpm-number" id="bdBpmNumber">—</span>
+                <span class="bd-bpm-unit">BPM</span>
+              </div>
+            </div>
+
+            <!-- Beat light strip -->
+            <div class="bd-light-strip" id="bdLightStrip">
+              <div class="bd-beat-cell" id="bdc0"></div>
+              <div class="bd-beat-cell" id="bdc1"></div>
+              <div class="bd-beat-cell" id="bdc2"></div>
+              <div class="bd-beat-cell" id="bdc3"></div>
+              <div class="bd-beat-cell" id="bdc4"></div>
+              <div class="bd-beat-cell" id="bdc5"></div>
+              <div class="bd-beat-cell" id="bdc6"></div>
+              <div class="bd-beat-cell" id="bdc7"></div>
+            </div>
+
+            <!-- Main spectrum canvas -->
+            <canvas id="bdCanvas" height="80"></canvas>
+
+            <!-- Waveform oscilloscope row -->
+            <canvas id="bdOscCanvas" height="36"></canvas>
+
+            <!-- Bottom info row -->
+            <div class="bd-bottom-row">
+              <div class="bd-stat" id="bdTempoLabel">Tempo: —</div>
+              <div class="bd-bars-mini" id="bdBarsMini">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="bd-stat" id="bdEnergyLabel">Energy: —</div>
+            </div>
+          </div>
+
+          <!-- Loop region -->
+          <div class="loop-region">
+            <label class="loop-toggle"><input type="checkbox" id="loopRegionToggle" onchange="toggleLoopRegion()"/> Loop Region</label>
+            <div class="loop-inputs">
+              <input type="number" id="loopStart" min="0" value="0" onchange="updateLoopRegion()"/> s →
+              <input type="number" id="loopEnd"   min="0" value="30" onchange="updateLoopRegion()"/> s
+              <button class="btn-xs" onclick="setLoopFromCurrent()">📍 Set here</button>
+              <label class="loop-toggle" style="margin-left:8px"><input type="checkbox" id="countInToggle"/> Count-in</label>
+            </div>
+          </div>
+
+          <!-- Lyrics -->
+          <div class="lyrics-card" id="lyricsCard">
+            <div class="lyrics-card-header">
+              <div class="lyrics-card-title">
+                <span class="lyrics-icon">📝</span>
+                <span>Lyrics</span>
+              </div>
+              <div class="lyrics-card-actions">
+                <button class="btn-xs" id="lyricsEditBtn" onclick="toggleLyricsEdit()">✏️ Edit</button>
+                <button class="btn-xs" id="lyricsAutoScrollBtn" onclick="toggleLyricsScroll()">📜 Auto-scroll</button>
+              </div>
+            </div>
+            <!-- Display mode -->
+            <div class="lyrics-display" id="lyricsDisplay">
+              <p class="lyrics-placeholder">No lyrics yet — click Edit to add them</p>
+            </div>
+            <!-- Edit mode (hidden by default) -->
+            <textarea class="lyrics-editor hidden" id="lyricsEditor"
+              placeholder="Paste or type the lyrics here…&#10;&#10;They will be saved automatically."></textarea>
+            <div class="lyrics-edit-footer hidden" id="lyricsEditFooter">
+              <button class="btn-primary" onclick="saveLyrics()" style="font-size:.75rem;padding:7px 16px">💾 Save</button>
+              <button class="btn-ghost" onclick="cancelLyricsEdit()" style="font-size:.75rem;padding:7px 14px">Cancel</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: LIBRARY ── -->
+    <div class="page" id="page-library">
+      <div class="page-header">
+        <h1 class="page-title">Song Library</h1>
+        <div class="lib-toolbar">
+          <input class="lib-search" id="libSearch" placeholder="🔍 Search songs…" oninput="filterLibrary(this.value)"/>
+          <select class="lib-sort" onchange="sortLibrary(this.value)">
+            <option value="date">Recently Added</option>
+            <option value="name">Name A–Z</option>
+            <option value="bpm">BPM</option>
+            <option value="key">Key</option>
+            <option value="duration">Duration</option>
+          </select>
+          <button class="btn-primary" onclick="document.getElementById('fileInput').click()">+ Add Songs</button>
+        </div>
+      </div>
+
+      <!-- Upload drop zone -->
+      <div class="lib-drop-zone" id="libDropZone">
+        <div class="ldz-icon">🎧</div>
+        <div class="ldz-text">Drop audio files here to add them</div>
+        <div class="ldz-sub">MP3, WAV, FLAC, OGG, M4A</div>
+      </div>
+
+      <!-- Songs table -->
+      <div class="songs-table-wrap">
+        <table class="songs-table">
+          <thead>
+            <tr>
+              <th class="th-num">#</th>
+              <th>Title</th>
+              <th>BPM</th>
+              <th>Key</th>
+              <th>Chords</th>
+              <th>Duration</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="songsTableBody">
+            <tr><td colspan="7" class="table-empty">No songs yet. Upload some above!</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── PAGE: PLAYLISTS ── -->
+    <div class="page" id="page-playlists">
+      <div class="page-header">
+        <h1 class="page-title">My Playlists</h1>
+        <button class="btn-primary" onclick="promptNewPlaylist()">+ New Playlist</button>
+      </div>
+
+      <div class="playlists-grid" id="playlistsGrid">
+        <div class="pg-empty">Create a playlist to organise your songs</div>
+      </div>
+    </div>
+
+    <!-- ── PAGE: ANALYSIS ── -->
+    <div class="page" id="page-analysis">
+      <div class="page-header">
+        <h1 class="page-title">Deep Analysis</h1>
+        <p class="page-sub" id="analysisSubtitle">Select a song from the library to analyse it</p>
+      </div>
+
+      <div class="analysis-layout">
+        <div class="an-left">
+          <!-- BPM card -->
+          <div class="an-card">
+            <div class="an-card-label">TEMPO</div>
+            <div class="an-big" id="anBpm">—</div>
+            <div class="an-sub" id="anTempoLabel">—</div>
+            <div class="bpm-bars" id="anBpmBars"></div>
+          </div>
+
+          <!-- Key card -->
+          <div class="an-card">
+            <div class="an-card-label">KEY & SCALE</div>
+            <div class="an-big" id="anKey">—</div>
+            <div class="an-sub" id="anScaleDesc">—</div>
+            <div class="an-relative" id="anRelative">—</div>
+            <div class="an-scale-notes" id="anScaleNotes"></div>
+          </div>
+
+          <!-- Energy card -->
+          <div class="an-card">
+            <div class="an-card-label">ENERGY & MOOD</div>
+            <div class="energy-meters" id="energyMeters"></div>
+          </div>
+        </div>
+
+        <div class="an-right">
+          <!-- Chords -->
+          <div class="an-card">
+            <div class="an-card-label">DETECTED CHORDS</div>
+            <div class="chords-grid" id="anChordsGrid"></div>
+          </div>
+
+          <!-- Circle of fifths -->
+          <div class="an-card">
+            <div class="an-card-label">CIRCLE OF FIFTHS</div>
+            <canvas id="cofCanvas" width="280" height="280"></canvas>
+          </div>
+
+          <!-- Waveform analysis -->
+          <div class="an-card">
+            <div class="an-card-label">FREQUENCY SPECTRUM</div>
+            <canvas id="spectrumCanvas" width="400" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════════
+       BOTTOM PLAYER BAR (always visible)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="now-playing-bar" id="nowPlayingBar">
+    <div class="npb-left">
+      <div class="npb-art" id="npbArt">🎵</div>
+      <div class="npb-info">
+        <div class="npb-title" id="npbTitle">No song playing</div>
+        <div class="npb-meta" id="npbMeta">—</div>
+      </div>
+      <button class="npb-heart" id="npbHeart" onclick="toggleFavorite()">♡</button>
+    </div>
+
+    <div class="npb-center">
+      <div class="npb-controls">
+        <button class="npb-btn" onclick="toggleShuffle()" id="npbShuffle" title="Shuffle">🔀</button>
+        <button class="npb-btn" onclick="skipTrack(-1)" title="Previous">⏮</button>
+        <button class="npb-btn" onclick="skipSeconds(-10)" title="-10s">
+          <span style="font-size:.7rem;font-weight:700">-10</span>
+        </button>
+        <button class="npb-play" id="npbPlay" onclick="togglePlay()">▶</button>
+        <button class="npb-btn" onclick="skipSeconds(10)" title="+10s">
+          <span style="font-size:.7rem;font-weight:700">+10</span>
+        </button>
+        <button class="npb-btn" onclick="skipTrack(1)" title="Next">⏭</button>
+        <button class="npb-btn" id="npbLoop" onclick="toggleLoop()" title="Loop">🔁</button>
+      </div>
+      <div class="npb-progress">
+        <span class="npb-time" id="npbCurrent">0:00</span>
+        <div class="npb-bar" id="npbBar" onclick="seekFromBar(event)">
+          <div class="npb-fill" id="npbFill"></div>
+        </div>
+        <span class="npb-time" id="npbTotal">0:00</span>
+      </div>
+    </div>
+
+    <div class="npb-right">
+      <span class="npb-badge" id="npbKeyBadge">—</span>
+      <span class="npb-badge" id="npbBpmBadge">—</span>
+      <div class="npb-vol-group">
+        <span>🔊</span>
+        <input type="range" class="npb-vol" id="npbVol" min="0" max="1" step="0.02" value="1" oninput="changeVolume(this.value)"/>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ══ MODALS ═══════════════════════════════════════════════ -->
+
+<!-- Playlist picker modal (Add to Playlist) -->
+<div class="modal-overlay hidden" id="addToPlModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add to Playlist</h3>
+      <button class="modal-close" onclick="closeModal('addToPlModal')">✕</button>
+    </div>
+    <div class="modal-body" id="addToPlBody"></div>
+    <div class="modal-footer">
+      <button class="btn-primary" onclick="promptNewPlaylist()">+ New Playlist</button>
+    </div>
+  </div>
+</div>
+
+<!-- Playlist detail modal -->
+<div class="modal-overlay hidden" id="plDetailModal">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <div>
+        <h3 id="plDetailName">Playlist</h3>
+        <p id="plDetailMeta" class="modal-meta"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-sm" onclick="playPlaylist(currentPlDetailId)">▶ Play All</button>
+        <button class="btn-sm-danger" onclick="deletePlaylist(currentPlDetailId)">🗑 Delete</button>
+        <button class="modal-close" onclick="closeModal('plDetailModal')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="plDetailBody"></div>
+  </div>
+</div>
+
+<!-- Name dialog -->
+<div class="modal-overlay hidden" id="nameDialog">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="nameDialogTitle">Name</h3>
+      <button class="modal-close" onclick="closeModal('nameDialog')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input class="modal-input" id="nameDialogInput" placeholder="Enter name…"/>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="nameDialogOk">Save</button>
+      <button class="btn-ghost" onclick="closeModal('nameDialog')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload progress overlay -->
+<div class="upload-overlay hidden" id="uploadOverlay">
+  <div class="uo-box">
+    <div class="uo-spinner"></div>
+    <div class="uo-title" id="uoTitle">Uploading…</div>
+    <div class="uo-sub"   id="uoSub">Please wait</div>
+    <div class="uo-bar-wrap"><div class="uo-bar" id="uoBar"></div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Audio -->
+<audio id="audioPlayer" hidden></audio>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# BeatLens v5 requirements
+# Install: pip install -r requirements.txt
+
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# Audio analysis (required for BPM/key/chord detection)
+librosa==0.10.2
+numpy==1.26.4
+soundfile==0.12.1
+scipy==1.13.0
+
+# Auth — optional but recommended
+# If PyJWT fails to install, the server uses a built-in HMAC token instead
+PyJWT==2.8.0
