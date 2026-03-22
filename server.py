@@ -40,17 +40,35 @@ try:
     import librosa
     LIBROSA = True
     print("✅ librosa — full analysis enabled")
-except ImportError:
+except ImportError as e:
     LIBROSA = False
     np = None
-    print("⚠️  librosa not installed: pip install librosa")
+    print(f"⚠️  librosa not available: {e}")
+    print("   Install: pip install librosa numpy soundfile")
+
+# scipy is used internally by librosa but not required directly.
+# We never import it ourselves — this just suppresses the warning
+# if librosa tries to use it and it's missing.
+try:
+    import scipy
+    SCIPY = True
+except ImportError:
+    SCIPY = False
+    # Patch out the scipy dependency librosa might warn about
+    import sys, types
+    # Provide a minimal stub so librosa doesn't hard-fail on import
+    if 'scipy' not in sys.modules:
+        stub = types.ModuleType('scipy')
+        stub.signal = types.ModuleType('scipy.signal')
+        sys.modules['scipy']        = stub
+        sys.modules['scipy.signal'] = stub.signal
 
 try:
     import jwt as pyjwt
     JWT = True
 except ImportError:
     JWT = False
-    print("⚠️  PyJWT not installed: pip install PyJWT")
+    print("⚠️  PyJWT not installed — using HMAC token fallback")
 
 # ── App ───────────────────────────────────────────────────────
 app = FastAPI(title="BeatLens API", version="5.0")
@@ -1073,15 +1091,33 @@ def row_to_song(row) -> dict:
 # ── Run ───────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
+
+    # Render (and most cloud hosts) assign a random port via $PORT env var.
+    # Fall back to 8000 for local development.
+    PORT = int(os.environ.get("PORT", 8000))
+    IS_PROD = os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("FLY_APP_NAME")
+
     print("\n" + "="*60)
     print("  🎵  BeatLens v5")
     print(f"  {'✅' if LIBROSA else '❌'} librosa  {'(full analysis)' if LIBROSA else '— pip install librosa'}")
-    print(f"  {'✅' if JWT    else '⚠️'} PyJWT   {'(auth)' if JWT else '— pip install PyJWT'}")
+    print(f"  {'✅' if JWT    else '⚠️'} PyJWT   {'(auth)' if JWT else '— fallback token active'}")
     fe = FRONTEND/"index.html" if (FRONTEND/"index.html").exists() else BASE/"index.html"
     if fe.exists():
-        print(f"  ✅ Frontend → http://localhost:8000")
+        print(f"  ✅ Frontend found")
     else:
-        print(f"  ❌ Put index.html in {BASE}")
-    print(f"  💾 DB: {DB_PATH}")
+        print(f"  ❌ Put index.html next to server.py")
+    print(f"  💾 DB:      {DB_PATH}")
+    print(f"  📁 Uploads: {UPLOADS}")
+    print(f"  🌐 Port:    {PORT}")
+    if not IS_PROD:
+        print(f"  → http://localhost:{PORT}")
     print("="*60+"\n")
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+
+    uvicorn.run(
+        "server:app",
+        host     = "0.0.0.0",
+        port     = PORT,
+        # Disable reload in production (Render sets RENDER env var)
+        reload   = not bool(IS_PROD),
+        workers  = 1,
+    )

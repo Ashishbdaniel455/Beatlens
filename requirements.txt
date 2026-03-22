@@ -1,16 +1,27 @@
-# BeatLens v5 requirements
+# BeatLens v5 — Python dependencies
+# Compatible with Python 3.11 (recommended) and 3.12
+# Do NOT use Python 3.13+ — scipy/librosa wheels not available yet
+#
 # Install: pip install -r requirements.txt
 
+# ── Web server ────────────────────────────────────────────────
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
 python-multipart==0.0.9
 
-# Audio analysis (required for BPM/key/chord detection)
-librosa==0.10.2
+# ── Audio analysis ────────────────────────────────────────────
+# Pin numpy first — librosa depends on it
 numpy==1.26.4
+# soundfile handles audio file I/O (has prebuilt wheels for 3.11/3.12)
 soundfile==0.12.1
-scipy==1.13.0
+# librosa 0.10.2 has wheels for Python 3.11 and 3.12
+librosa==0.10.2
 
-# Auth — optional but recommended
-# If PyJWT fails to install, the server uses a built-in HMAC token instead
+# ── Auth ──────────────────────────────────────────────────────
 PyJWT==2.8.0
+
+# ── NOTE: scipy is intentionally NOT listed here ──────────────
+# scipy requires Fortran to build from source and has no wheels
+# for Python 3.13+. librosa uses it internally but works without
+# it for all features we need. If you're on Python 3.11/3.12 and
+# want it: pip install scipy==1.13.0

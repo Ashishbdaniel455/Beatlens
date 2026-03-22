@@ -12,6 +12,18 @@
 const API = 'http://localhost:8000';
 function esc(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// Auto-detect API URL:
+// · On Render / any cloud host  → same origin (no localhost)
+// · Local dev                   → http://localhost:8000
+const _isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const _apiBase = _isLocal ? 'http://localhost:8000' : window.location.origin;
+// Override API with the auto-detected value
+// (auth.js loads before app.js so this will be the value both files use)
+Object.defineProperty(window, 'API', {
+  get: () => _apiBase,
+  configurable: true,
+});
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════════════════════

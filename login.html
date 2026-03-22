@@ -241,7 +241,9 @@
 </div>
 
 <script>
-const API = 'http://localhost:8000';
+// Auto-detect: local dev uses localhost, cloud uses same origin
+const _isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const API = _isLocal ? 'http://localhost:8000' : window.location.origin;
 
 function switchTab(tab) {
   document.getElementById('formLogin').style.display    = tab==='login'    ? '' : 'none';
