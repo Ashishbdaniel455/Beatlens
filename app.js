@@ -26,6 +26,7 @@ const S = {
   waveformPeaks: null,
   waveformW:    0,
   waveCtx:      null,
+  _lastWaveDraw: 0,
   // Beat detection
   audioCtx:     null,
   analyserNode: null,
@@ -66,10 +67,13 @@ async function loadFromServer() {
       api('GET', '/api/songs'),
       api('GET', '/api/playlists'),
     ]);
-    S.songs     = songs;
-    S.playlists = playlists;
+    S.songs     = Array.isArray(songs)     ? songs     : [];
+    S.playlists = Array.isArray(playlists) ? playlists : [];
   } catch(e) {
-    toast('Could not connect to server. Is it running?', 'error');
+    console.error('loadFromServer failed:', e);
+    const msg = e.message || String(e);
+    // Show the actual error so it's easier to debug
+    toast('Failed to load library: ' + msg, 'error');
   }
 }
 
@@ -511,8 +515,6 @@ async function playSongById(id) {
   updatePlayerPage(song);
   updatePlayButtons();
   renderLibrary();
-
-  drawWaveform(song);
   startBeatDetection();
   updateLyricsDisplay(song);
 
@@ -520,7 +522,16 @@ async function playSongById(id) {
     renderAnalysis(song);
   }
 
+  // Navigate FIRST so the player page is visible and canvas has real dimensions
   navigate('player', document.querySelector('[data-page=player]'));
+
+  // Draw waveform AFTER two animation frames so the browser has painted
+  // and offsetWidth returns the real value instead of 0
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      drawWaveform(song);
+    });
+  });
   cancelAnimationFrame(S.animFrame);
   S.animFrame = requestAnimationFrame(progressLoop);
 }
@@ -529,20 +540,24 @@ function progressLoop() {
   if (!audio.duration) { S.animFrame = requestAnimationFrame(progressLoop); return; }
   const pct = audio.currentTime / audio.duration;
 
-  // Seekbar + time
+  // Seekbar + time (every frame — lightweight)
   document.getElementById('seekbarFill').style.width = (pct*100) + '%';
   document.getElementById('currentTime').textContent = fmt(audio.currentTime);
   document.getElementById('npbFill').style.width = (pct*100) + '%';
   document.getElementById('npbCurrent').textContent = fmt(audio.currentTime);
 
-  // Loop region
+  // Loop region check
   if (S.loopRegionOn && audio.currentTime >= S.loopEnd) {
     if (document.getElementById('countInToggle')?.checked) doCountIn();
     else audio.currentTime = S.loopStart;
   }
 
-  // Waveform playhead
-  if (S.waveformPeaks) redrawWaveform(pct, null);
+  // Waveform — throttle to ~15fps (every 67ms) to avoid thrashing canvas
+  const now = performance.now();
+  if (S.waveformPeaks && (!S._lastWaveDraw || now - S._lastWaveDraw > 67)) {
+    S._lastWaveDraw = now;
+    redrawWaveform(pct, null);
+  }
 
   S.animFrame = requestAnimationFrame(progressLoop);
 }
@@ -728,102 +743,236 @@ function renderPlayerQuickAdd() {
 // ═══════════════════════════════════════════════════════════════
 // WAVEFORM
 // ═══════════════════════════════════════════════════════════════
+
 async function drawWaveform(song) {
   const canvas = document.getElementById('waveformCanvas');
-  const ctx    = canvas.getContext('2d');
-  S.waveCtx    = ctx;
+  if (!canvas) return;
 
-  // Fetch waveform data from server
+  // Measure and set canvas size — page is visible now so offsetWidth is real
+  _initCanvas(canvas);
+  _drawPlaceholder(canvas);
+  S.waveformPeaks = null;
+
+  // Fetch waveform peaks with auth token
   try {
-    const data = await fetch(API + '/api/songs/' + song.id + '/waveform').then(r => r.json());
-    const peaks = data.peaks || [];
-    const W = canvas.offsetWidth;
-    const H = 120;
-    canvas.width  = W;
-    canvas.height = H;
+    const data  = await api('GET', '/api/songs/' + song.id + '/waveform');
+    const peaks = (data && data.peaks && data.peaks.length) ? data.peaks : null;
+
+    if (!peaks) {
+      _drawFromAudio(canvas);
+      return;
+    }
+
     S.waveformPeaks = peaks;
-    S.waveformW     = W;
+    _initCanvas(canvas);           // re-measure after async fetch
     redrawWaveform(0, null);
     setupWaveformEvents(canvas);
   } catch(e) {
-    // Fallback: empty waveform
-    console.warn('Waveform data unavailable');
+    console.warn('Waveform fetch failed:', e.message);
+    _drawFromAudio(canvas);
   }
 }
 
-function redrawWaveform(playFrac, hoverFrac) {
-  const peaks = S.waveformPeaks; if (!peaks?.length) return;
-  const ctx = S.waveCtx;
-  const W   = S.waveformW;
-  const H   = 120;
+// Ensure canvas pixel dimensions match its CSS display size
+function _initCanvas(canvas) {
+  // Force layout so offsetWidth is real — navigate to player page first if needed
+  const W = canvas.offsetWidth  || canvas.parentElement?.offsetWidth || 600;
+  const H = 120;
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width  = W;
+    canvas.height = H;
+  }
+  S.waveCtx = canvas.getContext('2d');
+}
+
+// Draw a placeholder "loading" waveform while we fetch
+function _drawPlaceholder(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width  || 600;
+  const H = canvas.height || 120;
   ctx.clearRect(0, 0, W, H);
+
+  // Dimmed flat line + subtle bars to show something is here
+  const N = 80;
+  const bw = W / N;
+  for (let i = 0; i < N; i++) {
+    const h = (Math.sin(i * 0.4) * 0.3 + 0.35) * H * 0.5;
+    const y = H/2 - h/2;
+    ctx.fillStyle = 'rgba(0,245,196,.08)';
+    ctx.fillRect(i * bw + 1, y, bw - 2, h);
+  }
+
+  // Centre line
+  ctx.strokeStyle = 'rgba(0,245,196,.12)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+
+  // Loading text
+  ctx.fillStyle   = 'rgba(0,245,196,.3)';
+  ctx.font        = '11px Space Mono, monospace';
+  ctx.textAlign   = 'center';
+  ctx.fillText('Loading waveform…', W/2, H/2 + 20);
+}
+
+// If no server peaks, show a randomised placeholder waveform
+function _drawFromAudio(canvas) {
+  _initCanvas(canvas);
+  const fakePeaks = [];
+  for (let i = 0; i < 400; i++) {
+    fakePeaks.push(0.25 + Math.random() * 0.45);
+  }
+  S.waveformPeaks = fakePeaks;
+  redrawWaveform(0, null);
+  setupWaveformEvents(canvas);
+}
+
+function redrawWaveform(playFrac, hoverFrac) {
+  const canvas = document.getElementById('waveformCanvas');
+  if (!canvas) return;
+
+  const peaks = S.waveformPeaks;
+  const ctx   = canvas.getContext('2d');
+
+  // Always re-sync canvas size to actual display size
+  const W = canvas.offsetWidth || canvas.width || 600;
+  const H = 120;
+  if (canvas.width !== W) canvas.width = W;
+  canvas.height = H;
+  S.waveCtx = ctx;
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (!peaks || !peaks.length) {
+    _drawPlaceholder(canvas);
+    return;
+  }
+
   const N   = peaks.length;
   const px  = Math.round(playFrac * W);
   const hx  = hoverFrac !== null ? Math.round(hoverFrac * W) : null;
 
+  // ── Draw bars (symmetrical — grows from centre) ──────────
   for (let i = 0; i < W; i++) {
-    const peakIdx = Math.floor(i / W * N);
+    const peakIdx = Math.min(N - 1, Math.floor(i / W * N));
     const p = peaks[peakIdx] || 0;
-    const h = p * H * 0.9;
+    const h = Math.max(2, p * H * 0.88);
     const y = H/2 - h/2;
-    const g = ctx.createLinearGradient(0,y,0,y+h);
-    if (i < px) { g.addColorStop(0,'#1db954'); g.addColorStop(1,'#0a7a30'); }
-    else         { g.addColorStop(0,'rgba(29,185,84,.22)'); g.addColorStop(1,'rgba(10,122,48,.12)'); }
+
+    const played = i < px;
+
+    // Top half gradient
+    const g = ctx.createLinearGradient(0, y, 0, y + h/2);
+    if (played) {
+      g.addColorStop(0, 'rgba(0,245,196,.95)');
+      g.addColorStop(1, 'rgba(0,245,196,.55)');
+    } else {
+      g.addColorStop(0, 'rgba(0,245,196,.22)');
+      g.addColorStop(1, 'rgba(0,245,196,.08)');
+    }
     ctx.fillStyle = g;
-    ctx.fillRect(i, y, 1, h||1);
+    ctx.fillRect(i, y, 1, h/2);
+
+    // Bottom half (mirror, faded)
+    const g2 = ctx.createLinearGradient(0, H/2, 0, y + h);
+    if (played) {
+      g2.addColorStop(0, 'rgba(0,245,196,.55)');
+      g2.addColorStop(1, 'rgba(123,92,255,.1)');
+    } else {
+      g2.addColorStop(0, 'rgba(0,245,196,.08)');
+      g2.addColorStop(1, 'rgba(0,245,196,.01)');
+    }
+    ctx.fillStyle = g2;
+    ctx.fillRect(i, H/2, 1, h/2);
   }
 
-  // Loop region
+  // Centre axis line
+  ctx.strokeStyle = 'rgba(0,245,196,.1)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+
+  // ── Loop region ───────────────────────────────────────────
   if (S.loopRegionOn && audio.duration) {
     const lx1 = S.loopStart / audio.duration * W;
     const lx2 = S.loopEnd   / audio.duration * W;
-    ctx.fillStyle = 'rgba(124,77,255,.12)';
-    ctx.fillRect(lx1, 0, lx2-lx1, H);
-    ctx.strokeStyle = 'rgba(124,77,255,.5)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(lx1,0); ctx.lineTo(lx1,H); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(lx2,0); ctx.lineTo(lx2,H); ctx.stroke();
+    ctx.fillStyle   = 'rgba(123,92,255,.1)';
+    ctx.fillRect(lx1, 0, lx2 - lx1, H);
+    ctx.strokeStyle = 'rgba(123,92,255,.5)';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath(); ctx.moveTo(lx1, 0); ctx.lineTo(lx1, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx2, 0); ctx.lineTo(lx2, H); ctx.stroke();
   }
 
-  // Hover line
+  // ── Hover dashed line ─────────────────────────────────────
   if (hx !== null) {
-    ctx.save(); ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
-    ctx.beginPath(); ctx.moveTo(hx,0); ctx.lineTo(hx,H); ctx.stroke(); ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)';
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(hx, 0); ctx.lineTo(hx, H); ctx.stroke();
+    ctx.restore();
   }
 
-  // Playhead
+  // ── Playhead ──────────────────────────────────────────────
   if (px > 0) {
     ctx.save();
-    ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.shadowColor='#1db954'; ctx.shadowBlur=10;
-    ctx.beginPath(); ctx.moveTo(px,0); ctx.lineTo(px,H); ctx.stroke();
-    ctx.fillStyle='#1db954'; ctx.shadowBlur=0;
-    ctx.beginPath(); ctx.moveTo(px-5,0); ctx.lineTo(px+5,0); ctx.lineTo(px,9); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(px-5,H); ctx.lineTo(px+5,H); ctx.lineTo(px,H-9); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.lineWidth   = 2;
+    ctx.shadowColor = 'var(--accent, #00f5c4)';
+    ctx.shadowBlur  = 8;
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+
+    // Top triangle
+    ctx.fillStyle  = '#00f5c4';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(px - 5, 0); ctx.lineTo(px + 5, 0); ctx.lineTo(px, 8);
+    ctx.closePath(); ctx.fill();
+    // Bottom triangle
+    ctx.beginPath();
+    ctx.moveTo(px - 5, H); ctx.lineTo(px + 5, H); ctx.lineTo(px, H - 8);
+    ctx.closePath(); ctx.fill();
     ctx.restore();
   }
 }
 
 function setupWaveformEvents(canvas) {
+  if (!canvas) return;
   const tooltip = document.getElementById('waveTooltip');
+
   canvas.onmousemove = e => {
     const r    = canvas.getBoundingClientRect();
     const x    = e.clientX - r.left;
-    const frac = Math.max(0, Math.min(1, x/canvas.width));
-    tooltip.textContent  = fmt(frac * (audio.duration||0));
-    tooltip.style.left   = x + 'px';
-    tooltip.style.opacity= '1';
-    redrawWaveform(audio.duration ? audio.currentTime/audio.duration : 0, frac);
+    const frac = Math.max(0, Math.min(1, x / canvas.offsetWidth));
+    if (tooltip) {
+      tooltip.textContent  = fmt(frac * (audio.duration || 0));
+      tooltip.style.left   = x + 'px';
+      tooltip.style.opacity = '1';
+    }
+    redrawWaveform(audio.duration ? audio.currentTime / audio.duration : 0, frac);
   };
+
   canvas.onmouseleave = () => {
-    tooltip.style.opacity = '0';
-    redrawWaveform(audio.duration ? audio.currentTime/audio.duration : 0, null);
+    if (tooltip) tooltip.style.opacity = '0';
+    redrawWaveform(audio.duration ? audio.currentTime / audio.duration : 0, null);
   };
+
   canvas.onclick = e => {
     if (!audio.duration) return;
     const r    = canvas.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (e.clientX-r.left)/canvas.width));
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / canvas.offsetWidth));
     audio.currentTime = frac * audio.duration;
   };
+
+  // Handle window resize — register once only
+  if (!window._waveResizeAttached) {
+    window._waveResizeAttached = true;
+    window.addEventListener('resize', () => {
+      if (S.waveformPeaks) {
+        const pct = audio.duration ? audio.currentTime / audio.duration : 0;
+        redrawWaveform(pct, null);
+      }
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

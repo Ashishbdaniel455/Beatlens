@@ -9,20 +9,13 @@
    ============================================================ */
 'use strict';
 
-const API = 'http://localhost:8000';
-function esc(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// Auto-detect API URL:
-// · On Render / any cloud host  → same origin (no localhost)
-// · Local dev                   → http://localhost:8000
+// ── API base URL — works on localhost AND Render/any cloud host ──
+// On Render the frontend is served by the same Python server,
+// so we just use the current page's origin (no hardcoded localhost).
 const _isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const _apiBase = _isLocal ? 'http://localhost:8000' : window.location.origin;
-// Override API with the auto-detected value
-// (auth.js loads before app.js so this will be the value both files use)
-Object.defineProperty(window, 'API', {
-  get: () => _apiBase,
-  configurable: true,
-});
+const API      = _isLocal ? 'http://localhost:8000' : window.location.origin;
+
+function esc(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ═══════════════════════════════════════════════════════════════
 // AUTH
@@ -34,15 +27,51 @@ function getUsername() { return localStorage.getItem('bl_username') || 'User'; }
 // Redirect to login if not authenticated
 if (!getToken()) { window.location.href = 'login.html'; }
 
-// Authenticated API helper — overwrites the one in app.js
+// Authenticated API helper — used by both auth.js and app.js
 async function api(method, path, body) {
   const token = getToken();
-  const opts  = { method, headers: { 'Authorization': 'Bearer ' + token } };
-  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-  const r = await fetch(API + path, opts);
-  if (r.status === 401) { logout(); return; }
-  if (!r.ok) { const e = await r.text(); throw new Error(e); }
-  return r.json();
+  const opts  = {
+    method,
+    headers: { 'Authorization': 'Bearer ' + token },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+
+  let res;
+  try {
+    res = await fetch(API + path, opts);
+  } catch(networkErr) {
+    // Network failure — server unreachable
+    throw new Error('Cannot reach server at ' + API + ' — ' + networkErr.message);
+  }
+
+  if (res.status === 401) {
+    logout();
+    return;
+  }
+
+  if (!res.ok) {
+    // Try to get the error message from the response body
+    let errMsg = `HTTP ${res.status}`;
+    try {
+      const errData = await res.json();
+      errMsg = errData.detail || errData.message || errMsg;
+    } catch {
+      try { errMsg = await res.text() || errMsg; } catch {}
+    }
+    throw new Error(errMsg);
+  }
+
+  // Parse JSON — some endpoints return empty body on DELETE
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 function logout() {

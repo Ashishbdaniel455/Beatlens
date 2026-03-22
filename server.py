@@ -1060,7 +1060,20 @@ def health():
     users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     songs = conn.execute("SELECT COUNT(*) FROM songs").fetchone()[0]
     conn.close()
-    return {"status":"ok","librosa":LIBROSA,"jwt":JWT,"users":users,"songs":songs}
+    return {
+        "status":  "ok",
+        "librosa": LIBROSA,
+        "jwt":     JWT,
+        "users":   users,
+        "songs":   songs,
+        "python":  __import__('sys').version,
+        "base":    str(BASE),
+    }
+
+@app.get("/api/ping")
+def ping():
+    """Simple endpoint to test the API is reachable — no auth needed."""
+    return {"ping": "pong", "server": "BeatLens v5"}
 
 # ── Serve frontend ────────────────────────────────────────────
 @app.get("/")
