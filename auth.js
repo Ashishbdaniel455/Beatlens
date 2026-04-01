@@ -24,15 +24,11 @@ function esc(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function getToken()    { return localStorage.getItem('bl_token'); }
 function getUsername() { return localStorage.getItem('bl_username') || 'User'; }
 
-// Redirect to login if not authenticated
-if (!getToken()) { window.location.href = 'login.html'; }
-
-// Authenticated API helper — used by both auth.js and app.js
+// API helper — used by both auth.js and app.js
 async function api(method, path, body) {
-  const token = getToken();
   const opts  = {
     method,
-    headers: { 'Authorization': 'Bearer ' + token },
+    headers: {},
   };
   if (body) {
     opts.headers['Content-Type'] = 'application/json';
@@ -45,11 +41,6 @@ async function api(method, path, body) {
   } catch(networkErr) {
     // Network failure — server unreachable
     throw new Error('Cannot reach server at ' + API + ' — ' + networkErr.message);
-  }
-
-  if (res.status === 401) {
-    logout();
-    return;
   }
 
   if (!res.ok) {
@@ -78,7 +69,6 @@ function logout() {
   localStorage.removeItem('bl_token');
   localStorage.removeItem('bl_username');
   localStorage.removeItem('bl_user_id');
-  window.location.href = 'login.html';
 }
 
 // ── Inject user menu into sidebar ────────────────────────────

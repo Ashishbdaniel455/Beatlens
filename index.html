@@ -327,7 +327,12 @@
     <div class="page" id="page-playlists">
       <div class="page-header">
         <h1 class="page-title">My Playlists</h1>
-        <button class="btn-primary" onclick="promptNewPlaylist()">+ New Playlist</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn-sm" onclick="openPptxExporter()" title="Export song lyrics to PowerPoint">
+            📊 Export Lyrics → PowerPoint
+          </button>
+          <button class="btn-primary" onclick="promptNewPlaylist()">+ New Playlist</button>
+        </div>
       </div>
 
       <div class="playlists-grid" id="playlistsGrid">
@@ -507,7 +512,85 @@
 <!-- Audio -->
 <audio id="audioPlayer" hidden></audio>
 
+<!-- PPTX Exporter Modal -->
+<div class="modal-overlay hidden" id="pptxModal">
+  <div class="modal modal-wide" style="max-width:680px">
+    <div class="modal-header">
+      <div>
+        <h3>📊 Export Lyrics to PowerPoint</h3>
+        <p class="modal-meta">Select songs from your playlists — each song gets its own slide set</p>
+      </div>
+      <button class="modal-close" onclick="closeModal('pptxModal')">✕</button>
+    </div>
+
+    <div class="modal-body" id="pptxModalBody">
+      <div style="font-family:var(--mono);font-size:.7rem;color:var(--text3);margin-bottom:14px;
+        text-transform:uppercase;letter-spacing:.1em">Choose songs to include:</div>
+
+      <!-- Playlist accordion -->
+      <div id="pptxPlaylistList"></div>
+
+      <!-- Selection summary -->
+      <div id="pptxSummary" style="margin-top:16px;padding:12px 14px;
+        background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+        font-family:var(--mono);font-size:.75rem;color:var(--text2);display:none">
+        <span id="pptxSummaryText"></span>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="flex-direction:column;gap:12px;align-items:stretch">
+      <!-- Options row -->
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-family:var(--mono);font-size:.7rem;color:var(--text3)">Theme:</label>
+          <select id="pptxTheme" style="background:var(--surface2);border:1px solid var(--border);
+            color:var(--text);font-family:var(--mono);font-size:.72rem;
+            padding:5px 10px;border-radius:7px;cursor:pointer">
+            <option value="dark">🌑 Dark (BeatLens)</option>
+            <option value="church">✝️ Church (White)</option>
+            <option value="concert">🎤 Concert (Purple)</option>
+            <option value="minimal">📄 Minimal (Clean)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-family:var(--mono);font-size:.7rem;color:var(--text3)">Lines/slide:</label>
+          <select id="pptxLinesPerSlide" style="background:var(--surface2);border:1px solid var(--border);
+            color:var(--text);font-family:var(--mono);font-size:.72rem;
+            padding:5px 10px;border-radius:7px;cursor:pointer">
+            <option value="6">6 lines</option>
+            <option value="8" selected>8 lines</option>
+            <option value="10">10 lines</option>
+            <option value="12">12 lines</option>
+          </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--mono);
+          font-size:.7rem;color:var(--text3);cursor:pointer">
+          <input type="checkbox" id="pptxSongTitles" checked style="accent-color:var(--accent)"/>
+          Show song title slide
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--mono);
+          font-size:.7rem;color:var(--text3);cursor:pointer">
+          <input type="checkbox" id="pptxSongMeta" checked style="accent-color:var(--accent)"/>
+          Show key / BPM
+        </label>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="btn-primary" id="pptxGenerateBtn" onclick="generatePptx()"
+          style="flex:1;padding:12px">
+          ⬇️ Generate PowerPoint
+        </button>
+        <button class="btn-ghost" onclick="closeModal('pptxModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- pptxgenjs from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+
 <script src="auth.js"></script>
 <script src="app.js"></script>
+<script src="Lyrics_pptx.js"></script>
 </body>
 </html>
